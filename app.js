@@ -66,6 +66,9 @@ const els = {
   badge: $('badge'),
   statusDot: $('statusDot'),
   statusText: $('statusText'),
+  btnShowLogin: $('btnShowLogin'),
+  loginModal: $('loginModal'),
+  btnCancelLogin: $('btnCancelLogin'),
   username: $('username'),
   password: $('password'),
   btnLogin: $('btnLogin'),
@@ -108,12 +111,24 @@ els.btnClearLog.addEventListener('click', () => {
 function setStatus(text, state) {
   els.statusText.textContent = text;
   els.statusDot.className = 'status-dot' + (state === 'ok' ? ' ok' : state === 'fail' ? ' fail' : '');
+  els.btnShowLogin.style.display = state === 'ok' ? 'inline' : 'none';
 }
 
 function setBadge(running) {
   els.badge.textContent = running ? '运行中' : '待机';
   els.badge.className = 'badge ' + (running ? 'badge-running' : 'badge-idle');
 }
+
+// ─── Login modal ──────────────────────────────────────────────
+els.btnShowLogin.addEventListener('click', () => {
+  els.loginModal.style.display = 'flex';
+});
+els.btnCancelLogin.addEventListener('click', () => {
+  els.loginModal.style.display = 'none';
+});
+els.loginModal.addEventListener('click', (e) => {
+  if (e.target === els.loginModal) els.loginModal.style.display = 'none';
+});
 
 // ─── Login ────────────────────────────────────────────────────
 els.btnLogin.addEventListener('click', async () => {
@@ -129,6 +144,7 @@ els.btnLogin.addEventListener('click', async () => {
     store.set('username', username);
     store.set('password', password);
     setStatus('✓ 已登录，可以开始执行', 'ok');
+    els.loginModal.style.display = 'none';
     log('登录成功', 'success');
     loadGroups();
   } catch (e) {
@@ -461,6 +477,10 @@ function init() {
   if (token) {
     setStatus('已有登录状态，可直接执行', 'ok');
     loadGroups();
+  } else {
+    setStatus('请先登录捞捞账号', '');
+    els.btnShowLogin.style.display = 'none';
+    els.loginModal.style.display = 'flex';
   }
 }
 
