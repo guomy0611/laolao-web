@@ -477,6 +477,12 @@ function init() {
   if (token) {
     setStatus('已有登录状态，可直接执行', 'ok');
     loadGroups();
+    // 检测 ?run=1 参数，自动开始执行
+    if (new URLSearchParams(location.search).get('run') === '1') {
+      log('检测到执行指令，自动开始...', 'info');
+      setTimeout(() => els.btnStart.click(), 1500);
+      history.replaceState({}, '', location.pathname);
+    }
   } else {
     setStatus('请先登录捞捞账号', '');
     els.btnShowLogin.style.display = 'none';
