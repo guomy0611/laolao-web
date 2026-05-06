@@ -146,8 +146,6 @@ const PLATFORMS = {
 };
 
 // ─── API ──────────────────────────────────────────────────────
-let currentPlatform = 'laolao';
-
 function getBase(platform) {
   return PLATFORMS[platform || currentPlatform].base;
 }
@@ -184,6 +182,7 @@ function isWithinDays(taskId, days) {
 
 
 // ─── State ────────────────────────────────────────────────────
+let currentPlatform = 'laolao';
 let token = null;
 let isRunning = false;
 let scheduleTimer = null;
