@@ -1,3 +1,28 @@
+// ─── Gate ─────────────────────────────────────────────────────
+const GATE_KEY = 'liuyuxinnb';
+(function() {
+  const gate = document.getElementById('gate');
+  const input = document.getElementById('gateInput');
+  const btn = document.getElementById('gateBtn');
+  const err = document.getElementById('gateError');
+
+  if (sessionStorage.getItem('gate_ok') === '1') { gate.style.display = 'none'; return; }
+
+  function tryEnter() {
+    if (input.value === GATE_KEY) {
+      sessionStorage.setItem('gate_ok', '1');
+      gate.style.display = 'none';
+    } else {
+      err.textContent = '密码错误，请重试';
+      input.value = '';
+      input.focus();
+    }
+  }
+  btn.addEventListener('click', tryEnter);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') tryEnter(); });
+  input.focus();
+})();
+
 const BASE = 'https://alb.makemoneygogogo.com';
 const CIRCLE_ID = 61;
 const SNOWFLAKE_EPOCH = 1288834974657n;
