@@ -163,7 +163,7 @@ async function loadGroups() {
   try {
     const tk = await ensureToken();
     const groups = await api('GET', '/weibo/account/group/queryGroupList', null, tk);
-    const simplified = (groups || []).map(g => ({ id: g.groupId, name: g.groupName, accountCount: g.weiboAccountCount || 0 }));
+    const simplified = (groups || []).map(g => ({ id: g.groupId, name: g.name, accountCount: g.total || 0 }));
     renderGroups(simplified);
   } catch (e) {
     els.groupList.innerHTML = '<div class="group-loading">加载失败，请先登录</div>';
@@ -207,7 +207,7 @@ async function getAccountGroups(tk) {
   const result = [];
   for (const g of (groups || [])) {
     if (selectedSet.size > 0 && !selectedSet.has(String(g.groupId))) continue;
-    result.push({ groupId: g.groupId, accountIds: (g.weiboAccounts || []).map(a => a.weiboUserId) });
+    result.push({ groupId: g.groupId, accountIds: (g.accountList || []).map(a => a.id) });
   }
   return result;
 }
