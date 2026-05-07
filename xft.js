@@ -217,11 +217,19 @@ async function getAccountGroups(tk) {
 
 async function execTask(tk, detail, accountGroups) {
   const { taskId, commentTaskRule, originalTaskRule, likeTaskRule } = detail;
-  // 兼容多种规则字段名
   const rule = commentTaskRule || originalTaskRule || likeTaskRule || {};
-  // optCnt: commentTaskRule 用 numberTimes，originalTaskRule 用 optNum
   const optCnt = rule.numberTimes || rule.optNum || 1;
   const optTimeInterval = rule.intervalTime || rule.optIntervalTime || 90;
+
+  // 先绑定执行账号
+  const accountIds = accountGroups.flatMap(g => g.accountIds);
+  if (accountIds.length > 0) {
+    await api('POST', '/task/addOrUpdateTaskAccount', {
+      taskId,
+      weiboAccountIds: accountIds,
+    }, tk);
+  }
+
   return api('POST', '/lite/taskV2/executeTask', {
     taskId,
     optCnt,
@@ -289,7 +297,7 @@ async function runAutomation() {
     for (const detail of details) {
       if (!isRunning) break;
       try {
-        await execTask(tk, detail);
+        await execTask(tk, detail, accountGroups);
         successCount++;
         log(`✓ 提交: ${detail.taskName || detail.taskId}`, 'success');
       } catch (e) { log(`✗ ${detail.taskName || detail.taskId}: ${e.message}`, 'error'); }
