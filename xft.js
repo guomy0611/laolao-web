@@ -218,6 +218,7 @@ async function getAccountGroups(tk) {
 async function execTask(tk, detail, accountGroups) {
   const { taskId, commentTaskRule, originalTaskRule } = detail;
   const rule = commentTaskRule || originalTaskRule || {};
+  log(`DEBUG ${taskId}: executeClient=${rule.executeClient} optCnt=${rule.numberTimes} rule=${JSON.stringify(rule).slice(0,80)}`, 'debug');
   return api('POST', '/lite/taskV2/executeTask', {
     taskId,
     optCnt: rule.numberTimes || 1,
