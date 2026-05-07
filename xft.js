@@ -3,7 +3,7 @@ if (sessionStorage.getItem('gate_ok') !== '1') {
   location.replace('index.html');
 }
 
-const BASE = 'https://ddlink-proxy.guomy0611.workers.dev';
+const BASE = 'https://1326646269-hjr1ghbyot.ap-guangzhou.tencentscf.com';
 const SNOWFLAKE_EPOCH = 1288834974657n;
 
 // ─── Storage ──────────────────────────────────────────────────
