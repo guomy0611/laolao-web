@@ -229,7 +229,7 @@ async function execTask(tk, detail, accountGroups) {
     round: rule.round || 1,
     roundTime: rule.roundTime || 60,
     likeSort: 0,
-    executeClient: rule.executeClient ?? 3,
+    executeClient: rule.executeClient ?? 0,
     waterSticker: 0,
     failTask: null,
     channelId: null,
