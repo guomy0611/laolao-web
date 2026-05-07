@@ -218,10 +218,12 @@ async function getAccountGroups(tk) {
 async function execTask(tk, detail, accountGroups) {
   const { taskId, commentTaskRule, originalTaskRule, likeTaskRule,
           repostTaskRule, innerLikeTaskRule, hyperTalkTaskRule,
-          floorTaskRule, continueFireTaskRule } = detail;
+          floorTaskRule, continueFireTaskRule, executeClient: topExecuteClient } = detail;
   const rule = commentTaskRule || originalTaskRule || likeTaskRule
             || repostTaskRule || innerLikeTaskRule || hyperTalkTaskRule
             || floorTaskRule || continueFireTaskRule || {};
+  // 优先用规则里的 executeClient，其次用任务顶级的，最后默认 3
+  const executeClientVal = rule.executeClient ?? topExecuteClient ?? 3;
   const optCnt = rule.numberTimes || rule.optNum || 1;
   const optTimeInterval = rule.intervalTime || rule.optIntervalTime || 90;
 
@@ -241,7 +243,7 @@ async function execTask(tk, detail, accountGroups) {
     round: rule.round || 1,
     roundTime: rule.roundTime || 60,
     likeSort: rule.likeSort ?? 0,
-    executeClient: rule.executeClient ?? 3,
+    executeClient: executeClientVal,
     waterSticker: rule.waterSticker ?? 0,
     failTask: null,
     channelId: null,
@@ -290,11 +292,8 @@ async function runAutomation() {
 
     if (accountGroups.length === 0) { log('无可用分组', 'warn'); return; }
 
-    // 5. 并发拉详情，串行提交
-    const detailResults = await Promise.allSettled(toExecNew.map(t =>
-      api('POST', '/lite/taskV2/queryTaskDetail', { taskId: t.taskId }, tk)
-    ));
-    const details = detailResults.map(r => r.status === 'fulfilled' ? r.value : null).filter(Boolean);
+    // 5. 直接用列表数据执行（规则字段已在列表里）
+    const details = toExecNew;
 
     log(`提交 ${details.length} 个任务...`, 'info');
     let successCount = 0;
