@@ -197,7 +197,7 @@ els.btnRefreshGroups.addEventListener('click', loadGroups);
 
 // ─── Task helpers ─────────────────────────────────────────────
 async function fetchCircleTasks(tk, maxDays) {
-  const data = await api('POST', '/task/pageQueryUserAcceptTask', { pageNo: 1, pageSize: 50 }, tk);
+  const data = await api('POST', '/task/pageQueryUserOwnTask', { pageNo: 1, pageSize: 50 }, tk);
   return (data.list || []).filter(t => isWithinDays(t.taskId, maxDays));
 }
 
