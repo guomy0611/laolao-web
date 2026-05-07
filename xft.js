@@ -300,22 +300,84 @@ async function runAutomation() {
 
     log(`提交 ${details.length} 个任务...`, 'info');
     let successCount = 0;
+    const submitted = [];
     for (const detail of details) {
       if (!isRunning) break;
       try {
         await execTask(tk, detail, accountGroups);
         successCount++;
+        submitted.push({ taskId: detail.taskId, taskName: detail.taskName || detail.taskId });
         log(`✓ 提交: ${detail.taskName || detail.taskId}`, 'success');
       } catch (e) { log(`✗ ${detail.taskName || detail.taskId}: ${e.message}`, 'error'); }
       await sleep(1000);
     }
-    log(`提交完成，成功 ${successCount}/${details.length}`, successCount > 0 ? 'success' : 'warn');
+    log(`提交完成 ${successCount}/${details.length}，开始追踪...`, successCount > 0 ? 'success' : 'warn');
+
+    // 追踪执行结果
+    if (submitted.length > 0) await trackXftResults(tk, submitted);
 
   } catch (e) {
     log(`出错: ${e.message}`, 'error');
   }
 }
 
+
+// ─── Track XFT results ───────────────────────────────────────
+async function trackXftResults(tk, tasks) {
+  const pending = tasks.map(t => ({ ...t, done: false, lastStatus: null }));
+  const start = Date.now();
+
+  while (Date.now() - start < 10 * 60 * 1000) {
+    if (!isRunning && !scheduleRunning) break;
+    const checks = pending.filter(t => !t.done);
+    if (checks.length === 0) break;
+
+    const results = await Promise.allSettled(
+      checks.map(t => api('POST', '/lite/taskV2/queryPendingTask', { taskId: t.taskId }, tk))
+    );
+
+    for (let i = 0; i < results.length; i++) {
+      const task = checks[i];
+      const r = results[i];
+      if (r.status === 'rejected') continue;
+
+      const data = r.value;
+      if (!data || !data.list || data.list.length === 0) continue;
+
+      const latest = data.list[0];
+      const status = latest.executeStatus; // 1=执行中 2=完成 3=终止
+      const total = latest.totalResult;
+
+      if (status === 2 || status === 3) {
+        task.done = true;
+        const label = status === 2 ? '完成' : '终止';
+        const icon = total.successTotal > 0 ? '✓' : '✗';
+        log(`${icon} ${task.taskName} ${label}: 成功${total.successTotal}/${total.total}`, total.successTotal > 0 ? 'success' : 'warn');
+
+        // 打每个账号的结果
+        for (const acc of (latest.successResult || [])) {
+          if (acc.successTotal > 0) {
+            log(`  └ ${acc.account} 成功 ${acc.successTotal}/${acc.total}`, 'success');
+          } else {
+            // 找账号的详细错误
+            const detail = (latest.detailList || []).find(d => d.includes(acc.account));
+            const msg = detail ? detail.replace(`账号:${acc.account}进度:[${acc.successTotal}/${acc.total}]`, '').trim() : '失败';
+            log(`  └ ${acc.account} ${msg}`, 'error');
+          }
+        }
+      } else if (status === 1) {
+        const key = `${task.taskId}_${total.successTotal}`;
+        if (task.lastStatus !== key) {
+          task.lastStatus = key;
+          log(`⋯ ${task.taskName} 执行中 ${total.successTotal}/${total.total}`, 'info');
+        }
+      }
+    }
+
+    if (pending.every(t => t.done)) break;
+    await sleep(5000);
+  }
+}
 
 // ─── One-shot ─────────────────────────────────────────────────
 els.btnStart.addEventListener('click', async () => {
