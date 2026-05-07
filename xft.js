@@ -146,7 +146,7 @@ els.btnLogin.addEventListener('click', async () => {
 
 async function ensureToken() {
   if (token) {
-    try { await api('GET', '/weibo/account/getDefaultAccount', null, token); return token; } catch {}
+    try { await api('GET', '/user/getUserInfo', null, token); return token; } catch {}
   }
   const username = store.get('username');
   const password = store.get('password');
