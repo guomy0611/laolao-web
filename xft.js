@@ -216,8 +216,12 @@ async function getAccountGroups(tk) {
 }
 
 async function execTask(tk, detail, accountGroups) {
-  const { taskId, commentTaskRule, originalTaskRule, likeTaskRule } = detail;
-  const rule = commentTaskRule || originalTaskRule || likeTaskRule || {};
+  const { taskId, commentTaskRule, originalTaskRule, likeTaskRule,
+          repostTaskRule, innerLikeTaskRule, hyperTalkTaskRule,
+          floorTaskRule, continueFireTaskRule } = detail;
+  const rule = commentTaskRule || originalTaskRule || likeTaskRule
+            || repostTaskRule || innerLikeTaskRule || hyperTalkTaskRule
+            || floorTaskRule || continueFireTaskRule || {};
   const optCnt = rule.numberTimes || rule.optNum || 1;
   const optTimeInterval = rule.intervalTime || rule.optIntervalTime || 90;
 
