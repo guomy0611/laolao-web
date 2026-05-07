@@ -210,9 +210,9 @@ async function getAccountGroups(tk) {
   const result = [];
   for (const g of (groups || [])) {
     if (selectedSet.size > 0 && !selectedSet.has(String(g.groupId))) continue;
-    const validAccounts = (g.accountList || []).filter(a => a.exceptionStatus === 0 && a.bindStatus === 1);
-    if (validAccounts.length > 0) {
-      result.push({ groupId: g.groupId, accountIds: validAccounts.map(a => a.id) });
+    const accounts = (g.accountList || []);
+    if (accounts.length > 0) {
+      result.push({ groupId: g.groupId, accountIds: accounts.map(a => a.id) });
     }
   }
   return result;
