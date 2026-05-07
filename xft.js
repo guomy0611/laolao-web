@@ -327,11 +327,13 @@ async function runAutomation() {
 
 // ─── Track XFT results ───────────────────────────────────────
 async function trackXftResults(tk, tasks) {
-  const pending = tasks.map(t => ({ ...t, done: false, lastStatus: null }));
+  const pending = tasks.map(t => ({ ...t, done: false, lastProgress: null }));
   const start = Date.now();
 
-  while (Date.now() - start < 10 * 60 * 1000) {
+  while (Date.now() - start < 15 * 60 * 1000) {
+    await sleep(60000); // 每分钟查一次
     if (!isRunning && !scheduleRunning) break;
+
     const checks = pending.filter(t => !t.done);
     if (checks.length === 0) break;
 
@@ -349,36 +351,40 @@ async function trackXftResults(tk, tasks) {
 
       const latest = data.list[0];
       const status = latest.executeStatus; // 1=执行中 2=完成 3=终止
-      const total = latest.totalResult;
+      const total = latest.totalResult || {};
+      const executeId = total.executeId;
 
       if (status === 2 || status === 3) {
         task.done = true;
-        const label = status === 2 ? '完成' : '终止';
-        const icon = total.successTotal > 0 ? '✓' : '✗';
-        log(`${icon} ${task.taskName} ${label}: 成功${total.successTotal}/${total.total}`, total.successTotal > 0 ? 'success' : 'warn');
-
-        // 打每个账号的结果
-        for (const acc of (latest.successResult || [])) {
-          if (acc.successTotal > 0) {
-            log(`  └ ${acc.account} 成功 ${acc.successTotal}/${acc.total}`, 'success');
-          } else {
-            // 找账号的详细错误
-            const detail = (latest.detailList || []).find(d => d.includes(acc.account));
-            const msg = detail ? detail.replace(`账号:${acc.account}进度:[${acc.successTotal}/${acc.total}]`, '').trim() : '失败';
-            log(`  └ ${acc.account} ${msg}`, 'error');
+        // 用 executeId 查详细结果
+        if (executeId) {
+          try {
+            const summary = await api('POST', '/lite/taskV2/queryTaskExecuteSummary',
+              { taskId: task.taskId, recordId: executeId }, tk);
+            const label = status === 2 ? '完成' : '终止';
+            log(`${total.successTotal > 0 ? '✓' : '✗'} ${task.taskName} ${label}`, total.successTotal > 0 ? 'success' : 'warn');
+            log(`  ${summary.summaryText?.split('\n')[1] || ''}`, total.successTotal > 0 ? 'success' : 'warn');
+            for (const line of (summary.execResultList || []).slice(0, 10)) {
+              const ok = line.includes('成功');
+              log(`  └ ${line}`, ok ? 'success' : 'error');
+            }
+            if ((summary.execResultList || []).length > 10) {
+              log(`  └ ...共 ${summary.execResultList.length} 个账号`, 'info');
+            }
+          } catch {
+            log(`✓ ${task.taskName} 完成 成功${total.successTotal}/${total.total}`, total.successTotal > 0 ? 'success' : 'warn');
           }
         }
       } else if (status === 1) {
-        const key = `${task.taskId}_${total.successTotal}`;
-        if (task.lastStatus !== key) {
-          task.lastStatus = key;
-          log(`⋯ ${task.taskName} 执行中 ${total.successTotal}/${total.total}`, 'info');
+        const prog = `${total.successTotal}/${total.total}`;
+        if (task.lastProgress !== prog) {
+          task.lastProgress = prog;
+          log(`⋯ ${task.taskName} 执行中 ${prog}`, 'info');
         }
       }
     }
 
     if (pending.every(t => t.done)) break;
-    await sleep(5000);
   }
 }
 
