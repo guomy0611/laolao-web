@@ -222,10 +222,10 @@ async function execTask(tk, detail, accountGroups) {
   const rule = commentTaskRule || originalTaskRule || likeTaskRule
             || repostTaskRule || innerLikeTaskRule || hyperTalkTaskRule
             || floorTaskRule || continueFireTaskRule || {};
-  // 优先用规则里的 executeClient，其次用任务顶级的，最后默认 3
   const executeClientVal = rule.executeClient ?? topExecuteClient ?? 3;
-  const optCnt = rule.numberTimes || rule.optNum || 1;
-  const optTimeInterval = rule.intervalTime || rule.optIntervalTime || 90;
+  // 兼容各类型字段名：转发用 repostCnt/repostTimeInterval，其他用 numberTimes/optNum
+  const optCnt = rule.repostCnt || rule.numberTimes || rule.optNum || 1;
+  const optTimeInterval = rule.repostTimeInterval || rule.intervalTime || rule.optIntervalTime || 10;
 
   // 先绑定执行账号
   const accountIds = accountGroups.flatMap(g => g.accountIds);
