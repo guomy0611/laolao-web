@@ -130,6 +130,7 @@ els.btnLogin.addEventListener('click', async () => {
     store.set('token', token);
     store.set('username', username);
     store.set('password', password);
+    if (data.lastCircle?.lastCircleId) store.set('circleId', data.lastCircle.lastCircleId);
     setStatus('✓ 已登录，可以开始执行', 'ok');
     els.loginModal.style.display = 'none';
     log('登录成功', 'success');
@@ -197,8 +198,10 @@ els.btnRefreshGroups.addEventListener('click', loadGroups);
 
 // ─── Task helpers ─────────────────────────────────────────────
 async function fetchCircleTasks(tk, maxDays) {
-  const data = await api('POST', '/task/pageQueryUserOwnTask', { pageNo: 1, pageSize: 50 }, tk);
-  return (data.list || []).filter(t => isWithinDays(t.taskId, maxDays));
+  // 先从登录响应或 storage 里拿 circleId
+  const circleId = store.get('circleId') || 145;
+  const data = await api('POST', '/task/pageQueryPoolTask', { pageNo: 1, pageSize: 50, circleId }, tk);
+  return (data.list || []);
 }
 
 async function getAccountGroups(tk) {
@@ -252,10 +255,10 @@ async function runAutomation() {
         await api('POST', '/task/acceptTask', { taskId: task.taskId }, tk);
         log(`已领取: ${task.taskName || task.taskId}`, 'info');
         await sleep(500);
-      } catch (e) { log(`领取失败 ${task.taskId}: ${e.message}`, 'error'); }
+      } catch (e) { log(`领取: ${task.taskName?.slice(0,10)}: ${e.message}`, 'warn'); }
     }
 
-    // 3. 重新获取，全部执行（星粉通无 lastLot，直接提交）
+    // 3. 重新获取已领取的任务
     const allTasks = await fetchCircleTasks(tk, maxDays);
     const toExecNew = allTasks.filter(t => t.receive);
 
