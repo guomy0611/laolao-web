@@ -215,23 +215,29 @@ async function getAccountGroups(tk) {
   return result;
 }
 
-async function execTask(tk, detail) {
+async function execTask(tk, detail, accountGroups) {
   const { taskId, commentTaskRule, originalTaskRule } = detail;
   const rule = commentTaskRule || originalTaskRule || {};
-  return api('POST', '/lite/taskV2/executeTask', {
-    taskId,
-    optCnt: rule.numberTimes || 1,
-    optTimeInterval: rule.intervalTime || 90,
-    round: rule.round || 1,
-    roundTime: rule.roundTime || 60,
-    likeSort: 0,
-    executeClient: rule.executeClient || 3,
-    waterSticker: 0,
-    failTask: null,
-    channelId: null,
-    verifyTaskSwitch: false,
-    forwardTaskStack: false,
-  }, tk);
+  // 串行对每个分组提交一次
+  const results = [];
+  for (const g of accountGroups) {
+    const r = await api('POST', '/lite/taskV2/executeTask', {
+      taskId,
+      optCnt: rule.numberTimes || 1,
+      optTimeInterval: rule.intervalTime || 90,
+      round: rule.round || 1,
+      roundTime: rule.roundTime || 60,
+      likeSort: 0,
+      executeClient: 3,
+      waterSticker: 0,
+      failTask: null,
+      channelId: g.groupId,
+      verifyTaskSwitch: false,
+      forwardTaskStack: false,
+    }, tk);
+    results.push(r);
+  }
+  return results;
 }
 
 // ─── Main automation ──────────────────────────────────────────
@@ -285,7 +291,7 @@ async function runAutomation() {
     for (const detail of details) {
       if (!isRunning) break;
       try {
-        await execTask(tk, detail);
+        await execTask(tk, detail, accountGroups);
         successCount++;
         log(`✓ 提交: ${detail.taskName || detail.taskId}`, 'success');
       } catch (e) { log(`✗ ${detail.taskName || detail.taskId}: ${e.message}`, 'error'); }
