@@ -216,13 +216,16 @@ async function getAccountGroups(tk) {
 }
 
 async function execTask(tk, detail, accountGroups) {
-  const { taskId, commentTaskRule, originalTaskRule } = detail;
-  const rule = commentTaskRule || originalTaskRule || {};
-  log(`DEBUG ${taskId}: executeClient=${rule.executeClient} optCnt=${rule.numberTimes} rule=${JSON.stringify(rule).slice(0,80)}`, 'debug');
+  const { taskId, commentTaskRule, originalTaskRule, likeTaskRule } = detail;
+  // 兼容多种规则字段名
+  const rule = commentTaskRule || originalTaskRule || likeTaskRule || {};
+  // optCnt: commentTaskRule 用 numberTimes，originalTaskRule 用 optNum
+  const optCnt = rule.numberTimes || rule.optNum || 1;
+  const optTimeInterval = rule.intervalTime || rule.optIntervalTime || 90;
   return api('POST', '/lite/taskV2/executeTask', {
     taskId,
-    optCnt: rule.numberTimes || 1,
-    optTimeInterval: rule.intervalTime || 90,
+    optCnt,
+    optTimeInterval,
     round: rule.round || 1,
     roundTime: rule.roundTime || 60,
     likeSort: 0,
