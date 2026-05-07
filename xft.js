@@ -232,11 +232,14 @@ async function execTask(tk, detail, accountGroups) {
 
   // 先绑定执行账号
   const accountIds = accountGroups.flatMap(g => g.accountIds);
+  log(`绑定账号: ${accountIds.length} 个`, 'debug');
   if (accountIds.length > 0) {
     await api('POST', '/task/addOrUpdateTaskAccount', {
       taskId,
       weiboAccountIds: accountIds,
     }, tk);
+  } else {
+    log('警告: 没有可用账号，跳过绑定', 'warn');
   }
 
   return api('POST', '/lite/taskV2/executeTask', {
