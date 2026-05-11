@@ -207,12 +207,16 @@ async function getAccountGroups(tk, taskId, optType) {
   const groups = await api('GET', `/goprod/accountgroup/info?task_id=${taskId}&optType=${optType}&flag=3`, null, tk);
   const selectedSet = new Set(selectedGroupIds.map(String));
   const result = [];
+  const accountNames = new Set();
   for (const g of groups) {
     if (selectedSet.size > 0 && !selectedSet.has(String(g.id))) continue;
     const accounts = (g.accounts || []).filter(a => !a.is_frozen);
-    if (accounts.length > 0) result.push({ groupId: g.id, accountIds: accounts.map(a => a.id) });
+    if (accounts.length > 0) {
+      result.push({ groupId: g.id, accountIds: accounts.map(a => a.id) });
+      accounts.forEach(a => accountNames.add(a.weibo_username));
+    }
   }
-  return result;
+  return { groups: result, accountNames };
 }
 
 async function execTask(tk, detail, accountGroups, signInAutoVerify) {
@@ -275,32 +279,41 @@ async function runAutomation() {
 
     // 3. 过滤已执行成功的
     const allTasks = await fetchCircleTasks(tk, maxDays);
-    const toExec = allTasks.filter(t => t.isAccept === 1);
-    const lotResults = await Promise.allSettled(
-      toExec.map(t => api('POST', '/prod/app/task/lastLot', { value: t.taskId }, tk))
-    );
-    const toExecNew = toExec.filter((t, i) => {
-      const r = lotResults[i];
-      if (r.status === 'rejected') return true;
-      const lots = r.value;
-      if (!lots || lots.length === 0) return true;
-      const lot = lots[0];
-      if (lot.status === 1) return false;
-      if (lot.status === 2 && lot.successCount > 0) return false;
-      return true;
-    });
-
-    log(`待执行: ${toExecNew.length} 个（跳过已成功: ${toExec.length - toExecNew.length} 个）`, 'info');
-    if (toExecNew.length === 0) { log('本轮无新任务', 'info'); return; }
-
-    // 4. 获取账号分组
+    // 4. 获取账号分组（提前拿，过滤时需要账号名单）
     let accountGroups = [];
+    let accountNames = new Set();
     try {
-      accountGroups = await getAccountGroups(tk, toExecNew[0].taskId, toExecNew[0].optType);
+      ({ groups: accountGroups, accountNames } = await getAccountGroups(tk, allTasks[0]?.taskId || 0, allTasks[0]?.optType || 1));
       log(`可用分组: ${accountGroups.length} 个`, 'info');
     } catch (e) { log(`获取账号失败: ${e.message}`, 'warn'); }
 
     if (accountGroups.length === 0) { log('无可用账号', 'warn'); return; }
+
+    const toExec = allTasks.filter(t => t.isAccept === 1);
+    const lotResults = await Promise.allSettled(
+      toExec.map(t => api('POST', '/prod/app/task/lastLot', { value: t.taskId }, tk))
+    );
+    // 对已成功的任务，查上次执行的账号，若和当前选中账号没有重叠才跳过
+    const toExecNew = (await Promise.all(toExec.map(async (t, i) => {
+      const r = lotResults[i];
+      if (r.status === 'rejected') return t;
+      const lots = r.value;
+      if (!lots || lots.length === 0) return t;
+      const lot = lots[0];
+      if (lot.status === 1) return null; // 执行中，跳过
+      if (lot.status === 2 && lot.successCount > 0) {
+        try {
+          const accts = await api('POST', '/prod/app/task/account/execDetail', { value: lot.lotNo }, tk);
+          const prevNames = new Set((accts || []).map(a => a.accountName));
+          const overlap = [...accountNames].some(n => prevNames.has(n));
+          if (overlap) return null; // 当前账号已跑过，跳过
+        } catch { return null; }
+      }
+      return t;
+    }))).filter(Boolean);
+
+    log(`待执行: ${toExecNew.length} 个（跳过已成功: ${toExec.length - toExecNew.length} 个）`, 'info');
+    if (toExecNew.length === 0) { log('本轮无新任务', 'info'); return; }
 
     // 5. 并发拉详情，串行提交
     const detailResults = await Promise.allSettled(toExecNew.map(t =>
