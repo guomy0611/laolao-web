@@ -12,6 +12,15 @@ const store = {
   set: (key, val) => { try { localStorage.setItem('xft_' + key, JSON.stringify(val)); } catch {} },
 };
 
+function getDeviceId() {
+  let id = store.get('deviceid');
+  if (!id) {
+    id = 'and' + Array.from({length: 15}, () => Math.floor(Math.random() * 16).toString(16)).join('');
+    store.set('deviceid', id);
+  }
+  return id;
+}
+
 // ─── API ──────────────────────────────────────────────────────
 async function api(method, path, body, token) {
   const headers = {
@@ -20,8 +29,8 @@ async function api(method, path, body, token) {
     'apilevel': '36',
     'platform': 'android',
     'env': 'online',
-    'deviceid': 'web000000000001',
-    'devicename': 'web',
+    'deviceid': getDeviceId(),
+    'devicename': 'android',
   };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(`${BASE}${path}`, {
@@ -278,7 +287,7 @@ async function runAutomation() {
       try {
         await api('POST', '/task/acceptTask', { taskId: task.taskId }, tk);
         log(`已领取: ${task.taskName || task.taskId}`, 'info');
-        await sleep(500);
+        await sleep(jitter(800, 1800));
       } catch (e) { log(`领取: ${task.taskName?.slice(0,10)}: ${e.message}`, 'warn'); }
     }
 
@@ -301,6 +310,7 @@ async function runAutomation() {
     // 5. 直接用列表数据执行（规则字段已在列表里）
     const details = toExecNew;
 
+    shuffle(details);
     log(`提交 ${details.length} 个任务...`, 'info');
     let successCount = 0;
     const submitted = [];
@@ -312,7 +322,7 @@ async function runAutomation() {
         submitted.push({ taskId: detail.taskId, taskName: detail.taskName || detail.taskId });
         log(`✓ 提交: ${detail.taskName || detail.taskId}`, 'success');
       } catch (e) { log(`✗ ${detail.taskName || detail.taskId}: ${e.message}`, 'error'); }
-      await sleep(1000);
+      await sleep(jitter(10000, 20000));
     }
     log(`提交完成 ${successCount}/${details.length}，开始追踪...`, successCount > 0 ? 'success' : 'warn');
 
@@ -435,14 +445,20 @@ els.btnSchedule.addEventListener('click', async () => {
       if (!scheduleRunning) { setBadge(false); return; }
     }
 
-    scheduleTimer = setInterval(async () => {
-      if (isRunning) return;
-      isRunning = true;
-      setBadge(true);
-      await runAutomation();
-      isRunning = false;
-      if (scheduleRunning) setBadge(true);
-    }, minutes * 60 * 1000);
+    const scheduleNext = async () => {
+      if (!scheduleRunning) return;
+      if (!isRunning) {
+        isRunning = true;
+        setBadge(true);
+        await runAutomation();
+        isRunning = false;
+        if (scheduleRunning) setBadge(true);
+      }
+      if (!scheduleRunning) return;
+      const delay = jitter((minutes - 5) * 60 * 1000, (minutes + 5) * 60 * 1000);
+      scheduleTimer = setTimeout(scheduleNext, Math.max(delay, 60000));
+    };
+    scheduleTimer = setTimeout(scheduleNext, jitter((minutes - 5) * 60 * 1000, (minutes + 5) * 60 * 1000));
   }
 });
 
@@ -492,5 +508,7 @@ function init() {
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function jitter(min, max) { return min + Math.random() * (max - min); }
+function shuffle(arr) { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; }
 
 init();

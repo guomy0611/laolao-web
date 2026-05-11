@@ -269,7 +269,7 @@ async function runAutomation() {
       try {
         await api('POST', '/prod/app/task/acceptTask', { taskId: task.taskId, circleId: CIRCLE_ID }, tk);
         log(`已领取: ${task.taskName || task.taskId}`, 'info');
-        await sleep(500);
+        await sleep(jitter(800, 1800));
       } catch (e) { log(`领取失败 ${task.taskId}: ${e.message}`, 'error'); }
     }
 
@@ -308,6 +308,7 @@ async function runAutomation() {
     ));
     const details = detailResults.map(r => r.status === 'fulfilled' ? r.value : null).filter(Boolean);
 
+    shuffle(details);
     log(`提交 ${details.length} 个任务...`, 'info');
     let successCount = 0;
     for (const detail of details) {
@@ -316,7 +317,7 @@ async function runAutomation() {
         await execTask(tk, detail, accountGroups, signInAutoVerify);
         successCount++;
       } catch (e) { log(`✗ ${detail.taskName || detail.taskId}: ${e.message}`, 'error'); }
-      await sleep(1000);
+      await sleep(jitter(10000, 20000));
     }
     log(`提交完成，成功 ${successCount}/${details.length}`, successCount > 0 ? 'success' : 'warn');
 
@@ -414,14 +415,20 @@ els.btnSchedule.addEventListener('click', async () => {
       if (!scheduleRunning) { setBadge(false); return; }
     }
 
-    scheduleTimer = setInterval(async () => {
-      if (isRunning) return;
-      isRunning = true;
-      setBadge(true);
-      await runAutomation();
-      isRunning = false;
-      if (scheduleRunning) setBadge(true);
-    }, minutes * 60 * 1000);
+    const scheduleNext = async () => {
+      if (!scheduleRunning) return;
+      if (!isRunning) {
+        isRunning = true;
+        setBadge(true);
+        await runAutomation();
+        isRunning = false;
+        if (scheduleRunning) setBadge(true);
+      }
+      if (!scheduleRunning) return;
+      const delay = jitter((minutes - 5) * 60 * 1000, (minutes + 5) * 60 * 1000);
+      scheduleTimer = setTimeout(scheduleNext, Math.max(delay, 60000));
+    };
+    scheduleTimer = setTimeout(scheduleNext, jitter((minutes - 5) * 60 * 1000, (minutes + 5) * 60 * 1000));
   }
 });
 
@@ -471,5 +478,7 @@ function init() {
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function jitter(min, max) { return min + Math.random() * (max - min); }
+function shuffle(arr) { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; }
 
 init();
