@@ -39,6 +39,7 @@ let token = store.get('token');
 let isRunning = false;
 let scheduleTimer = null;
 let selectedGroupIds = store.get('selectedGroupIds') || [];
+let rotateIndex = 0;
 
 // ─── DOM ──────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -55,6 +56,7 @@ const els = {
   groupList: $('groupList'),
   btnRefreshGroups: $('btnRefreshGroups'),
   signInAutoVerify: $('signInAutoVerify'),
+  autoRotateGroups: $('autoRotateGroups'),
   taskDays: $('taskDays'),
   btnStart: $('btnStart'),
   btnSchedule: $('btnSchedule'),
@@ -254,8 +256,33 @@ async function execTask(tk, detail, accountGroups, signInAutoVerify) {
 
 // ─── Main automation ──────────────────────────────────────────
 async function runAutomation() {
+  const autoRotate = els.autoRotateGroups.checked;
+
+  if (autoRotate) {
+    // 拿所有选中分组的 ID 列表
+    const allGroupEls = [...document.querySelectorAll('#groupList .group-item.selected')];
+    const groupIds = allGroupEls.map(el => el.dataset.id);
+    if (groupIds.length === 0) { log('没有选中任何分组', 'warn'); return; }
+    log(`=== 自动轮组：共 ${groupIds.length} 组 ===`, 'info');
+    for (const gid of groupIds) {
+      if (!isRunning) break;
+      const name = document.querySelector(`#groupList .group-item[data-id="${gid}"] .group-name`)?.textContent || gid;
+      log(`─── 轮组：${name} ───`, 'info');
+      await runAutomationWithGroup([gid]);
+      if (!isRunning) break;
+      if (gid !== groupIds[groupIds.length - 1]) await sleep(jitter(3000, 6000));
+    }
+    log('=== 轮组完成 ===', 'success');
+  } else {
+    await runAutomationWithGroup(null);
+  }
+}
+
+async function runAutomationWithGroup(groupIdOverride) {
   const maxDays = parseInt(els.taskDays.value) || 3;
   const signInAutoVerify = els.signInAutoVerify.checked;
+  const prevSelectedGroupIds = selectedGroupIds;
+  if (groupIdOverride) selectedGroupIds = groupIdOverride;
 
   log(`=== 开始执行（${maxDays}天内任务）===`, 'info');
   try {
@@ -277,9 +304,8 @@ async function runAutomation() {
       } catch (e) { log(`领取失败 ${task.taskId}: ${e.message}`, 'error'); }
     }
 
-    // 3. 过滤已执行成功的
+    // 3. 获取账号分组（提前拿，过滤时需要账号名单）
     const allTasks = await fetchCircleTasks(tk, maxDays);
-    // 4. 获取账号分组（提前拿，过滤时需要账号名单）
     let accountGroups = [];
     let accountNames = new Set();
     try {
@@ -289,24 +315,24 @@ async function runAutomation() {
 
     if (accountGroups.length === 0) { log('无可用账号', 'warn'); return; }
 
+    // 4. 过滤已被当前账号执行过的任务
     const toExec = allTasks.filter(t => t.isAccept === 1);
     const lotResults = await Promise.allSettled(
       toExec.map(t => api('POST', '/prod/app/task/lastLot', { value: t.taskId }, tk))
     );
-    // 对已成功的任务，查上次执行的账号，若和当前选中账号没有重叠才跳过
     const toExecNew = (await Promise.all(toExec.map(async (t, i) => {
       const r = lotResults[i];
       if (r.status === 'rejected') return t;
       const lots = r.value;
       if (!lots || lots.length === 0) return t;
       const lot = lots[0];
-      if (lot.status === 1) return null; // 执行中，跳过
+      if (lot.status === 1) return null;
       if (lot.status === 2 && lot.successCount > 0) {
         try {
           const accts = await api('POST', '/prod/app/task/account/execDetail', { value: lot.lotNo }, tk);
           const prevNames = new Set((accts || []).map(a => a.accountName));
           const overlap = [...accountNames].some(n => prevNames.has(n));
-          if (overlap) return null; // 当前账号已跑过，跳过
+          if (overlap) return null;
         } catch { return null; }
       }
       return t;
@@ -339,6 +365,8 @@ async function runAutomation() {
 
   } catch (e) {
     log(`出错: ${e.message}`, 'error');
+  } finally {
+    if (groupIdOverride) selectedGroupIds = prevSelectedGroupIds;
   }
 }
 
@@ -460,6 +488,8 @@ function init() {
 
   els.signInAutoVerify.checked = store.get('signInAutoVerify') || false;
   els.signInAutoVerify.addEventListener('change', () => store.set('signInAutoVerify', els.signInAutoVerify.checked));
+  els.autoRotateGroups.checked = store.get('autoRotateGroups') || false;
+  els.autoRotateGroups.addEventListener('change', () => store.set('autoRotateGroups', els.autoRotateGroups.checked));
   els.taskDays.addEventListener('change', () => store.set('taskDays', els.taskDays.value));
   els.intervalMinutes.addEventListener('change', () => store.set('intervalMinutes', els.intervalMinutes.value));
 
